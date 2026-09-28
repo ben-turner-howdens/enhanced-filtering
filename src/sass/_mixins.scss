@@ -1,0 +1,68 @@
+@use "sass:math";
+@use "sass:map";
+@use "sass:meta";
+
+$h-navy: #243036;
+$h-green: #008A21;
+$h-red: #C20016;
+
+$breakpoints: (
+    mobile: 768px,
+    tablet: 1024px,
+    s-desk: 1260px,
+);
+
+@mixin res($size) {
+    @if map.has-key($breakpoints, $size) {
+        @media (max-width: map.get($breakpoints, $size)) {
+            @content;
+        }
+    }
+
+    @else if meta.type-of($size) == number {
+        @media (max-width: $size) {
+            @content;
+        }
+    }
+
+    @else {
+        @warn "No breakpoint found for `#{$size}`.";
+    }
+}
+
+@mixin res-img($width, $height, $size: cover) {
+    width: 100%;
+    height: auto;
+    aspect-ratio: math.div($width, $height);
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: $size;
+}
+
+@mixin h-btn($background-color: null, $color: null, $width: 200px) {
+    $background-color: if($background-color == null, $h-navy, $background-color);
+    $color: if($color == null, #fff, $color);
+
+    background-color: $background-color;
+    border-radius: 30px;
+    color: $color;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2.36px;
+    line-height: 0;
+    padding: 23.5px 50px;
+    text-align: center;
+    text-decoration: none;
+    text-transform: uppercase;
+    width: $width;
+}
+
+@mixin font($color: #000, $font-size: 16px, $font-weight: 400, $font-family: Rooster, $line-height: 1, $letter-spacing: 0) {
+    color: $color;
+    font-family: $font-family;
+    font-weight: $font-weight;
+    line-height: $line-height;
+    font-size: $font-size;
+    letter-spacing: $letter-spacing;
+}
