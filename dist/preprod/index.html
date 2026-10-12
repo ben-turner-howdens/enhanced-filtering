@@ -1,77 +1,82 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Enhanced Filtering</title>
-    <link rel="stylesheet" href="../dist/css/styles.css" />
-  <style>
-body,main{font-family:Rooster,sans-serif!important;background-color:#f5f5f5}h1{text-align:center;font-size:26px;font-weight:700;line-height:1.2;margin-bottom:16px}.filter-wrapper{display:flex;flex-direction:row;justify-content:safe center;max-width:1400px;margin:0 auto;gap:8px;overflow-x:auto;padding:0 16px 12px;scroll-snap-type:x mandatory;scroll-padding-inline:max(16px,50% - 75px);scrollbar-width:thin;cursor:grab;touch-action:pan-y;-webkit-overflow-scrolling:touch}.filter-wrapper.is-dragging{cursor:grabbing;scroll-snap-type:none;user-select:none}.filter-wrapper__item{flex:0 0 150px;scroll-snap-align:center;text-align:center;padding:0 4px}.filter-wrapper__item img{width:150px;border-radius:50%}.filter-wrapper__item a,.filter-wrapper__item p{color:#000;text-decoration:none}.filter-wrapper__item a:hover{text-decoration:underline}.filter-wrapper__item p{font-size:16px;margin-top:4px}@media (min-width:1240px){.filter-wrapper{padding-right:0;padding-left:0}}
+<style>
+body,main{font-family:Rooster,sans-serif!important;background-color:#f5f5f5;margin:0}.product-listing__navigation.carousel{display:none}.advanced_filters{box-sizing:border-box;margin:0 auto;max-width:1400px;position:relative;width:100%}.advanced_filters__viewport{position:relative}.advanced_filters__arrows{position:absolute;bottom:0;top:0;right:22px;width:110px;z-index:5}.advanced_filters__arrow{align-items:center;background:#fff;border:none;border-radius:0;box-shadow:0 0 8px rgba(0,0,0,.1490196078);color:#243036;cursor:pointer;display:inline-flex;height:48px;justify-content:center;margin:0;overflow:hidden;padding:0;position:absolute;right:0;top:50%;transform:translateY(-50%);width:48px;transition:ease-in-out .4s}.advanced_filters__arrow img{display:block;pointer-events:none;width:34px}.advanced_filters__arrow--prev{right:48px;transform:translateY(-50%) rotate(-180deg)}.advanced_filters__arrow:not(.advanced_filters__arrow--disabled):focus,.advanced_filters__arrow:not(.advanced_filters__arrow--disabled):hover{outline:0}.advanced_filters__arrow:not(.advanced_filters__arrow--disabled):focus img,.advanced_filters__arrow:not(.advanced_filters__arrow--disabled):hover img{filter:brightness(.85)}.advanced_filters__arrow--disabled{background-color:#fff;cursor:default;pointer-events:none}.advanced_filters__arrow--disabled img{opacity:.4}.advanced_filters__scrollbar-container{background:#c8c8c8;height:2px;margin:0 auto;max-width:100%;position:relative;width:80%;z-index:5}.advanced_filters__scrollbar-container--hidden{display:none}.advanced_filters__scrollbar{background-color:#c20016;height:100%;transform:translateX(0);transform-origin:left center;transition:transform .5s ease-in-out;width:0}.advanced_filters__wrapper{display:flex;flex-direction:row;gap:16px;justify-content:flex-start;margin:0;min-width:0;overflow-x:auto;padding:16px 18px 8px;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch}.advanced_filters__wrapper::-webkit-scrollbar{display:none}.advanced_filters__wrapper--has-selection .advanced_filters__item:not(.advanced_filters__item--active){opacity:.45}.advanced_filters__wrapper--has-selection .advanced_filters__item--active,.advanced_filters__wrapper--has-selection .advanced_filters__item:focus-within,.advanced_filters__wrapper--has-selection .advanced_filters__item:hover{opacity:1}.advanced_filters__item{flex:0 0 150px;padding:0 4px;text-align:center;transition:opacity .2s ease}.advanced_filters__item a{display:block}.advanced_filters__item .advanced_filters__image{border-radius:50%;display:block;height:200px;margin:0 auto;overflow:hidden;width:200px}.advanced_filters__item img{display:block;height:200px;object-fit:cover;transform:scale(1);transform-origin:center center;transition:transform .3s ease-in-out;width:200px}.advanced_filters__item a:focus-visible .advanced_filters__image img,.advanced_filters__item a:hover .advanced_filters__image img{transform:scale(1.1)}.advanced_filters__item a,.advanced_filters__item p{color:#000;text-decoration:none}.advanced_filters__item a:hover{text-decoration:underline}.advanced_filters__item a:focus-visible{border-radius:8px;outline:2px solid #243036;outline-offset:4px}.advanced_filters__item p{font-size:15px;margin-top:4px}.advanced_filters__item--active p{font-weight:700}@media (prefers-reduced-motion:reduce){.advanced_filters__item img{transition:none}}
 </style>
-</head>
-  <body>
-    <main>
-      <h1>Browse by room</h1>
-
-      <div class="filter-wrapper" aria-label="Filter options">
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?handle_location=Internal" aria-label="Internal Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_110217/clh_asset_levelc_110218/clh_asset_leveld_25709930/ass_25348605.jpg?w=448&hash=5E26A6B958E399344F05314158F25B17" alt="Internal Handles" />
-            <p>Internal Handles</p>
-          </a>
+<main>
+    <div class="advanced_filters" aria-label="Filter options carousel">
+      <div class="advanced_filters__viewport">
+        <div class="advanced_filters__wrapper" aria-label="Filter options">
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles/door-handles" aria-label="Internal Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_door-handles.png" alt="Internal Handles" /></span>
+              <p>Door Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles/cabinet-handles" aria-label="Internal Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_cabinet-handles.png" alt="Internal Handles" /></span>
+              <p>Cabinet Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?handle_location=Internal" aria-label="Internal Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_internal-handles.png" alt="Internal Handles" /></span>
+              <p>Internal Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?colour=Black" aria-label="Black Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_black-handles.png" alt="Black Handles" /></span>
+              <p>Black Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?colour=Brass" aria-label="Brass Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_brass-handles.png" alt="Brass Handles" /></span>
+              <p>Brass Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?colour=Chrome" aria-label="Chrome Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_chrome-handles.png" alt="Chrome Handles" /></span>
+              <p>Chrome Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?finish=Brushed" aria-label="Brushed Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_brushed-handles.png" alt="Brushed Handles" /></span>
+              <p>Brushed Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?colour=Brass&room_suitability=Kitchen" aria-label="Brass Kitchen Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_brass-kitchen-handles.png" alt="Brass Kitchen Handles" /></span>
+              <p>Brass Kitchen Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?brand=Fuller_and_Forge" aria-label="Fuller &amp; Forge Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_fuller-and-forge-handles.png" alt="Fuller & Forge Handles" /></span>
+              <p>Fuller &amp; Forge Handles</p>
+            </a>
+          </div>
+          <div class="advanced_filters__item">
+            <a href="/hardware/screws-and-ironmongery/handles?finish=Satin" aria-label="Satin Handles">
+              <span class="advanced_filters__image"><img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/handle-images/AF_satin-handles.png" alt="Satin Handles" /></span>
+              <p>Satin Handles</p>
+            </a>
+          </div>
         </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?colour=Black" aria-label="Black Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_110217/clh_asset_levelc_110218/clh_asset_leveld_25710004/ass_prod_img_25508953.jpg?w=448&hash=F0167F5EEABF127E708169B9FC6E6B91" alt="Black Handles" />
-            <p>Black Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?colour=Brass" aria-label="Brass Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_110217/clh_asset_levelc_110218/clh_asset_leveld_25710004/ass_25578264/ass_25578264_1_1.jpg" alt="Brass Handles" />
-            <p>Brass Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?colour=Chrome" aria-label="Chrome Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_110217/clh_asset_levelc_110218/clh_asset_leveld_25710004/thirdlight_36440888438/thirdlight_36440888438_1_1.jpg" alt="Chrome Handles" />
-            <p>Chrome Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?finish=Brushed" aria-label="Brushed Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_25707205/ass_25477941/ass_25477941_1_1.jpg" alt="Brushed Handles" />
-            <p>Brushed Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?colour=Brass&room_suitability=Kitchen" aria-label="Brass Kitchen Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_25707205/ass_25410663/ass_25410663_1_1.jpg " alt="Brass Kitchen Handles" />
-            <p>Brass Kitchen Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?brand=Fuller_and_Forge" aria-label="Fuller &amp; Forge Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_110217/clh_asset_levelc_110218/clh_asset_leveld_25709930/ass_prod_img_25436539.jpg?w=448&hash=CE6BB7E7C1EF483947F4B75A86B60C93" alt="Fuller & Forge Handles" />
-            <p>Fuller &amp; Forge Handles</p>
-          </a>
-        </div>
-
-        <div class="filter-wrapper__item">
-          <a href="https://www.howdens.com/hardware/screws-and-ironmongery/handles?finish=Satin" aria-label="Satin Handles">
-            <img src="https://www.howdens.com/-/media/howdens/assets/clh_asset_products/clh_asset_levela_108418/clh_asset_levelb_25707205/ass_25589640/ass_25589640_1_1.jpg" alt="Satin Handles" />
-            <p>Satin Handles</p>
-          </a>
+        <div class="advanced_filters__arrows">
+          <button type="button" class="advanced_filters__arrow advanced_filters__arrow--next" aria-label="Scroll filter options forward">
+            <img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/forward-ico" alt="Arrow" />
+          </button>
+          <button type="button" class="advanced_filters__arrow advanced_filters__arrow--prev" aria-label="Scroll filter options backward">
+            <img src="https://www.howdens.com/-/media/Images/2026/Enhanced-filters/forward-ico" alt="Arrow" />
+          </button>
         </div>
       </div>
-    </main>
-
-    <script src="./script.js" defer></script>
-  </body>
-</html>
+      <div class="advanced_filters__scrollbar-container">
+        <div class="advanced_filters__scrollbar"></div>
+      </div>
+    </div>
+  </main>

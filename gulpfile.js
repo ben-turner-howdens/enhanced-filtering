@@ -19,8 +19,8 @@ const defaults = {
   preprodDest: './dist/preprod',
   prodDest: './dist/prod',
   inlineCss: './dist/mincss/styles.min.css',
-  output: 'full-document',
-  stripScripts: false,
+  output: 'body-fragment',
+  stripScripts: true,
 };
 
 const userConfig = fs.existsSync('./gulp.config.js') ? require(path.resolve('./gulp.config.js')) : {};
