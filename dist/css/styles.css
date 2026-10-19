@@ -116,7 +116,7 @@ body {
   opacity: 1;
 }
 .advanced_filters__item {
-  flex: 0 0 150px;
+  flex: 0 0 125px;
   padding: 0 4px;
   text-align: center;
   transition: opacity 0.2s ease;
@@ -127,19 +127,19 @@ body {
 .advanced_filters__item .advanced_filters__image {
   border-radius: 50%;
   display: block;
-  height: 200px;
+  height: 125px;
   margin: 0 auto;
   overflow: hidden;
-  width: 200px;
+  width: 125px;
 }
 .advanced_filters__item img {
   display: block;
-  height: 200px;
+  height: 125px;
   object-fit: cover;
   transform: scale(1);
   transform-origin: center center;
   transition: transform 0.3s ease-in-out;
-  width: 200px;
+  width: 125px;
 }
 .advanced_filters__item a:hover .advanced_filters__image img,
 .advanced_filters__item a:focus-visible .advanced_filters__image img {
@@ -161,6 +161,7 @@ body {
 .advanced_filters__item p {
   font-size: 15px;
   margin-top: 4px;
+  line-height: 20px;
 }
 .advanced_filters__item--active p {
   font-weight: 700;
