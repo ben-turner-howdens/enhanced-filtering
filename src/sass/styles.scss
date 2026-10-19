@@ -29,6 +29,12 @@ body {
         right: 22px;
         width: 110px;
         z-index: 5;
+        display: none;
+
+        @include res(1210px) {
+            display: block;
+        }
+        
     }
 
     &__arrow {
@@ -111,7 +117,7 @@ body {
         display: flex;
         flex-direction: row;
         gap: 16px;
-        justify-content: flex-start;
+        justify-content: center;
         margin: 0;
         min-width: 0;
         overflow-x: auto;
@@ -119,6 +125,9 @@ body {
         scrollbar-width: none;
         -ms-overflow-style: none;
         -webkit-overflow-scrolling: touch;
+        @include res(1210px) {
+            justify-content: flex-start;
+        }
 
         &::-webkit-scrollbar {
             display: none;
