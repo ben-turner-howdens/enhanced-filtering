@@ -1,1 +1,7 @@
 /node_modules
+
+# Howdens UK SKU scraper
+/scraper/.venv/
+/scraper/output/
+/scraper/__pycache__/
+*.pyc

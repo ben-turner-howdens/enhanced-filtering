@@ -1,327 +1,324 @@
 (() => {
-	const root = document.querySelector('.advanced_filters');
-	const scroller = root?.querySelector('.advanced_filters__wrapper');
-	const prev = root?.querySelector('.advanced_filters__arrow--prev');
-	const next = root?.querySelector('.advanced_filters__arrow--next');
-	const thumb = root?.querySelector('.advanced_filters__scrollbar');
-	const track = root?.querySelector('.advanced_filters__scrollbar-container');
-	if (!root || !scroller) return;
+	const AF_BASE_PATH = '/hardware/screws-and-ironmongery/hinges';
+	const afIsLocal = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
+	const afNormPath = (pathname) => pathname.replace(/\/+$/, '') || '/';
+	const afPagePath = afNormPath(location.pathname);
 
-	const q = (sel, el = document) => el.querySelector(sel);
-	const qa = (sel, el = document) => [...el.querySelectorAll(sel)];
-	const path = (p) => p.replace(/\/+$/, '') || '/';
-	const eq = (a, b) => a === b || a.replace(/_/g, ' ') === b.replace(/_/g, ' ');
-	const keyOf = (href) => {
-		const u = new URL(href, location.origin);
-		return path(u.pathname) + u.search;
+	// Prod: only fire on the handles PLP (and child paths). Local preview always runs.
+	if (!afIsLocal && afPagePath !== AF_BASE_PATH && !afPagePath.startsWith(`${AF_BASE_PATH}/`)) return;
+
+	const afRoot = document.querySelector('.advanced_filters');
+	const afScroller = afRoot?.querySelector('.advanced_filters__wrapper');
+	if (!afRoot || !afScroller || afRoot.dataset.afReady) return;
+	afRoot.dataset.afReady = '1';
+
+	const afPrevBtn = afRoot.querySelector('.advanced_filters__arrow--prev');
+	const afNextBtn = afRoot.querySelector('.advanced_filters__arrow--next');
+	const afThumb = afRoot.querySelector('.advanced_filters__scrollbar');
+	const afTrack = afRoot.querySelector('.advanced_filters__scrollbar-container');
+
+	const afQuery = (sel, el = document) => el.querySelector(sel);
+	const afQueryAll = (sel, el = document) => [...el.querySelectorAll(sel)];
+	const afValuesEqual = (a, b) => a === b || a.replace(/_/g, ' ') === b.replace(/_/g, ' ');
+	const afParseUrl = (href) => new URL(href, location.origin);
+	const afLinkKey = (href) => {
+		const url = afParseUrl(href);
+		return afNormPath(url.pathname) + url.search;
 	};
-	const links = () => qa('.advanced_filters__item a[href]', scroller);
+	const afLinks = () => afQueryAll('.advanced_filters__item a[href]', afScroller);
+	const afFacetBoxes = () => afQueryAll('.filtering-sidebar input.filtering-sidebar__facets-checkbox');
+	const afSubmitBtn = () => afQuery('.filtering-sidebar__form-submit, button.js-update-filters');
+	const afDefer = (fn, delays) => delays.forEach((ms, i) => setTimeout(() => fn(i), ms));
+	const afTriggerClick = (el) => {
+		if (!el) return;
+		if (window.jQuery) window.jQuery(el).trigger('click');
+		else el.click();
+	};
 
-	const isLocal = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1)$/i.test(location.hostname);
-	const BASE_PATH = '/hardware/screws-and-ironmongery/handles';
-	let pending = null;
-	let scrollX = 0;
-	let keepScroll = false;
+	const AF_IGNORE_PARAMS = new Set(['useajax', 'p', 'page', 'sortby', 'spellcheck']);
+	let afPendingKey = null;
+	let afScrollX = 0;
+	let afKeepScroll = false;
 
-	// Full page load/refresh should not restore roundel filters.
-	// Local preview stores state in #af= via pushState — strip it whenever the script
-	// boots (clicks don't re-run this file; refresh does).
-	if (isLocal && location.hash.startsWith('#af=')) {
+	// Local preview stores filter state in #af= — clear on full boot/refresh.
+	if (afIsLocal && location.hash.startsWith('#af=')) {
 		history.replaceState(null, '', location.pathname + location.search);
 	}
 
-	const navEntry = performance.getEntriesByType?.('navigation')?.[0];
-	const isPageReload =
-		navEntry?.type === 'reload' ||
-		(typeof performance.navigation !== 'undefined' && performance.navigation.type === 1);
-
-	if (!isLocal && isPageReload) {
-		const current = path(location.pathname);
-		const base = path(BASE_PATH);
-		const onSection = current === base || current.startsWith(`${base}/`);
-		// Query facets (?colour=…) or path facets (/door-handles) both reset to the base PLP.
-		if (onSection && (location.search || current !== base)) {
-			location.replace(BASE_PATH);
-			return;
-		}
+	const afIsReload = performance.getEntriesByType?.('navigation')?.[0]?.type === 'reload';
+	if (!afIsLocal && afIsReload && (location.search || afPagePath !== AF_BASE_PATH)) {
+		location.replace(AF_BASE_PATH);
+		return;
 	}
 
-	const mount = () => {
-		const nav = q('.product-listing__navigation');
-		const listing = q('.js-product-listing');
-		if (nav) nav.after(root);
-		else if (listing) listing.before(root);
+	const afMount = () => {
+		const nav = afQuery('.product-listing__navigation');
+		const listing = afQuery('.js-product-listing');
+		if (nav) nav.after(afRoot);
+		else if (listing) listing.before(afRoot);
 	};
-	mount();
+	afMount();
 
-	const boxes = () => qa('.filtering-sidebar input.filtering-sidebar__facets-checkbox');
-	const submitBtn = () => q('.filtering-sidebar__form-submit, button.js-update-filters');
+	const afParamsOf = (url) => [...url.searchParams.entries()];
 
-	const paramsOf = (linkOrUrl) => {
-		const u = linkOrUrl instanceof URL ? linkOrUrl : new URL(linkOrUrl.href, location.origin);
-		return [...u.searchParams.entries()];
-	};
-
-	const currentUrl = () => {
-		if (isLocal && location.hash.startsWith('#af=')) {
+	const afCurrentUrl = () => {
+		if (afIsLocal && location.hash.startsWith('#af=')) {
 			return new URL(decodeURIComponent(location.hash.slice(4)), location.origin);
 		}
 		return new URL(location.href);
 	};
 
-	const IGNORE_PARAMS = new Set(['useajax', 'p', 'page', 'sortby', 'spellcheck']);
+	const afCurrentEntries = () =>
+		[...afCurrentUrl().searchParams.entries()].filter(([key]) => !AF_IGNORE_PARAMS.has(key.toLowerCase()));
 
-	const currentEntries = () =>
-		[...currentUrl().searchParams.entries()].filter(([key]) => !IGNORE_PARAMS.has(key.toLowerCase()));
+	const afIsExactRoundel = (link) => {
+		let url;
+		try {
+			url = afParseUrl(link.href);
+		} catch {
+			return false;
+		}
+		if (!afIsLocal && url.origin !== location.origin) return false;
 
-	/** Exact match: this roundel's params are the full current filter set. */
-	const isExactRoundel = (link) => {
-		const u = new URL(link.href, location.origin);
-		if (path(u.pathname) !== path(location.pathname)) return false;
+		const liveUrl = afCurrentUrl();
+		if (afNormPath(url.pathname) !== afNormPath(afIsLocal ? liveUrl.pathname : location.pathname)) return false;
 
-		const wanted = paramsOf(u);
+		const wanted = afParamsOf(url);
 		if (!wanted.length) return false;
-
-		const current = currentEntries();
+		const current = afCurrentEntries();
 		if (!current.length || current.length !== wanted.length) return false;
-
 		return wanted.every(([name, value]) =>
-			current.some(([k, v]) => k === name && eq(v, value))
+			current.some(([key, val]) => key === name && afValuesEqual(val, value))
 		);
 	};
 
-	const setActive = (link, { sticky = true } = {}) => {
-		links().forEach((a) => {
-			a.removeAttribute('aria-current');
-			a.closest('.advanced_filters__item')?.classList.remove('advanced_filters__item--active');
+	const afSetActive = (link, sticky = true) => {
+		afLinks().forEach((anchor) => {
+			anchor.removeAttribute('aria-current');
+			anchor.closest('.advanced_filters__item')?.classList.remove('advanced_filters__item--active');
 		});
-
 		if (!link) {
-			pending = null;
-			scroller.classList.remove('advanced_filters__wrapper--has-selection');
+			afPendingKey = null;
+			afScroller.classList.remove('advanced_filters__wrapper--has-selection');
 			return;
 		}
-
-		if (sticky) pending = keyOf(link.href);
+		if (sticky) afPendingKey = afLinkKey(link.href);
 		link.setAttribute('aria-current', 'true');
 		link.closest('.advanced_filters__item')?.classList.add('advanced_filters__item--active');
-		scroller.classList.add('advanced_filters__wrapper--has-selection');
+		afScroller.classList.add('advanced_filters__wrapper--has-selection');
 	};
 
-	const sync = () => {
-		const exact = links().find((link) => isExactRoundel(link));
+	const afSync = () => {
+		const exact = afLinks().find(afIsExactRoundel);
 		if (exact) {
-			pending = null;
-			setActive(exact, { sticky: false });
+			afPendingKey = null;
+			afSetActive(exact, false);
 			return;
 		}
-
-		if (pending) {
-			const link = links().find((a) => keyOf(a.href) === pending);
+		if (afPendingKey) {
+			const link = afLinks().find((anchor) => afLinkKey(anchor.href) === afPendingKey);
 			if (link) {
-				setActive(link, { sticky: false });
+				afSetActive(link, false);
 				return;
 			}
 		}
-
-		// No active filter — keep every roundel fully solid.
-		setActive(null);
+		afSetActive(null);
 	};
 
-	const restore = () => {
-		if (!keepScroll) return;
-		scroller.scrollLeft = scrollX;
-		controls();
+	const afUpdateControls = () => {
+		const maxScroll = Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
+		const hasOverflow = maxScroll > 1;
+		afTrack?.classList.toggle('advanced_filters__scrollbar-container--hidden', !hasOverflow);
+		afPrevBtn?.classList.toggle('advanced_filters__arrow--disabled', afScroller.scrollLeft <= 1);
+		afNextBtn?.classList.toggle('advanced_filters__arrow--disabled', afScroller.scrollLeft >= maxScroll - 1);
+		if (!afThumb || !afTrack || !hasOverflow) return;
+		const thumbWidth = (afScroller.clientWidth / afScroller.scrollWidth) * afTrack.clientWidth;
+		afThumb.style.width = `${thumbWidth}px`;
+		afThumb.style.transform = `translateX(${(afScroller.scrollLeft / maxScroll) * (afTrack.clientWidth - thumbWidth)}px)`;
 	};
 
-	const refresh = () => {
-		sync();
-		restore();
+	const afRefresh = () => {
+		afSync();
+		if (afKeepScroll) {
+			afScroller.scrollLeft = afScrollX;
+			afUpdateControls();
+		}
 	};
 
-	const controls = () => {
-		const max = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
-		const overflow = max > 1;
-		track?.classList.toggle('advanced_filters__scrollbar-container--hidden', !overflow);
-		prev?.classList.toggle('advanced_filters__arrow--disabled', scroller.scrollLeft <= 1);
-		next?.classList.toggle('advanced_filters__arrow--disabled', scroller.scrollLeft >= max - 1);
-		if (!thumb || !track || !overflow) return;
-		const w = (scroller.clientWidth / scroller.scrollWidth) * track.clientWidth;
-		thumb.style.width = `${w}px`;
-		thumb.style.transform = `translateX(${(scroller.scrollLeft / max) * (track.clientWidth - w)}px)`;
-	};
-
-	const step = (dir) => {
-		const item = q('.advanced_filters__item', scroller);
+	const afStep = (direction) => {
+		const item = afQuery('.advanced_filters__item', afScroller);
 		if (!item) return;
-		const gap = parseFloat(getComputedStyle(scroller).columnGap || getComputedStyle(scroller).gap) || 0;
-		scroller.scrollBy({ left: dir * (item.getBoundingClientRect().width + gap), behavior: 'smooth' });
+		const gap = parseFloat(getComputedStyle(afScroller).columnGap || getComputedStyle(afScroller).gap) || 0;
+		afScroller.scrollBy({ left: direction * (item.getBoundingClientRect().width + gap), behavior: 'smooth' });
 	};
 
-	const toggleFacet = (input) => {
+	const afToggleFacet = (input) => {
+		const id = CSS.escape(input.id);
 		const option =
-			q(`a.js-facet-option[data-id="${CSS.escape(input.id)}"]`) ||
-			q(`label[for="${CSS.escape(input.id)}"] a.js-facet-option`);
-
+			afQuery(`a.js-facet-option[data-id="${id}"]`) ||
+			afQuery(`label[for="${id}"] a.js-facet-option`);
 		if (option) {
 			const href = option.getAttribute('href');
 			option.removeAttribute('href');
-			if (window.jQuery) window.jQuery(option).trigger('click');
-			else option.click();
+			afTriggerClick(option);
 			if (href != null) option.setAttribute('href', href);
 			return;
 		}
-
 		input.click();
 	};
 
-	/** Replace all sidebar filters with exactly this roundel's params. */
-	const setExclusiveFacets = (params) => {
-		const wanted = [...params];
-		boxes().forEach((input) => {
-			const shouldCheck = wanted.some(([name, value]) => input.name === name && eq(input.value, value));
-			if (input.checked !== shouldCheck) toggleFacet(input);
+	const afSetExclusiveFacets = (params) => {
+		afFacetBoxes().forEach((input) => {
+			const shouldCheck = params.some(([name, value]) => input.name === name && afValuesEqual(input.value, value));
+			if (input.checked !== shouldCheck) afToggleFacet(input);
 		});
 	};
 
-	const clearFacets = () => {
-		const clearBtn = q('.filtering-sidebar .js-clear-filters, .js-clear-filters');
-		if (clearBtn && boxes().some((b) => b.checked)) {
-			if (window.jQuery) window.jQuery(clearBtn).trigger('click');
-			else clearBtn.click();
+	const afClearFacets = () => {
+		const clearBtn = afQuery('.filtering-sidebar .js-clear-filters, .js-clear-filters');
+		if (clearBtn && afFacetBoxes().some((box) => box.checked)) {
+			afTriggerClick(clearBtn);
 			return;
 		}
-		boxes().forEach((input) => {
-			if (input.checked) toggleFacet(input);
+		afFacetBoxes().forEach((input) => {
+			if (input.checked) afToggleFacet(input);
 		});
 	};
 
-	const submitFilters = () => {
-		const btn = submitBtn();
+	const afSubmitFilters = () => {
+		const btn = afSubmitBtn();
 		if (!btn) return false;
 		if (window.jQuery) window.jQuery(btn).trigger('click');
 		else btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 		return true;
 	};
 
-	const scheduleRefresh = () => {
-		[100, 500, 1000].forEach((ms, i) => setTimeout(() => {
-			if (pending && links().some((a) => keyOf(a.href) === pending && isExactRoundel(a))) {
-				pending = null;
-			}
-			refresh();
-			if (i === 2) keepScroll = false;
-		}, ms));
-	};
+	const afApply = (link) => {
+		let url;
+		try {
+			url = afParseUrl(link.href);
+		} catch {
+			return false;
+		}
+		if (url.origin !== location.origin) return false;
+		const params = afParamsOf(url);
+		if (afNormPath(url.pathname) !== afPagePath || !params.length) return false;
+		if (!afQuery('.filtering-sidebar') || !afSubmitBtn()) return false;
 
-	const apply = (link) => {
-		const u = new URL(link.href, location.origin);
-		const params = paramsOf(u);
-		if (path(u.pathname) !== path(location.pathname) || !params.length) return false;
-		if (!q('.filtering-sidebar') || !submitBtn()) return false;
+		afScrollX = afScroller.scrollLeft;
+		afKeepScroll = true;
 
-		scrollX = scroller.scrollLeft;
-		keepScroll = true;
-
-		if (isExactRoundel(link)) {
-			clearFacets();
-			setActive(null);
+		if (afIsExactRoundel(link)) {
+			afClearFacets();
+			afSetActive(null);
 		} else {
-			setActive(link);
-			setExclusiveFacets(params);
+			afSetActive(link);
+			afSetExclusiveFacets(params);
 		}
 
 		setTimeout(() => {
-			submitFilters();
-			scheduleRefresh();
+			afSubmitFilters();
+			afDefer((i) => {
+				if (afPendingKey && afLinks().some((anchor) => afLinkKey(anchor.href) === afPendingKey && afIsExactRoundel(anchor))) {
+					afPendingKey = null;
+				}
+				afRefresh();
+				if (i === 2) afKeepScroll = false;
+			}, [100, 500, 1000]);
 		}, 50);
 
 		return true;
 	};
 
-	const applyLocal = (link) => {
-		const u = new URL(link.href, location.origin);
-		const params = paramsOf(u);
-		const exact = isExactRoundel(link);
-
-		const next = new URL(BASE_PATH, location.origin);
-		if (!exact) {
-			params.forEach(([name, value]) => next.searchParams.append(name, value));
-			pending = keyOf(link.href);
-		} else {
-			pending = null;
-		}
-
-		history.pushState(null, '', `#af=${encodeURIComponent(path(next.pathname) + next.search)}`);
-		sync();
-	};
-
-	scroller.addEventListener('click', (e) => {
-		const link = e.target.closest('a[href]');
-		if (!link || !scroller.contains(link)) return;
-
-		if (isLocal) {
-			e.preventDefault();
-			applyLocal(link);
+	const afApplyLocal = (link) => {
+		let url;
+		try {
+			url = afParseUrl(link.href);
+		} catch {
 			return;
 		}
+		const params = afParamsOf(url);
+		const exact = afIsExactRoundel(link);
+		const nextUrl = new URL(AF_BASE_PATH, location.origin);
 
-		if (apply(link)) {
-			e.preventDefault();
-			e.stopPropagation();
+		if (!exact) {
+			params.forEach(([name, value]) => nextUrl.searchParams.append(name, value));
+			afPendingKey = afLinkKey(link.href);
+		} else {
+			afPendingKey = null;
 		}
-	}, true);
 
-	prev?.addEventListener('click', () => {
-		if (!prev.classList.contains('advanced_filters__arrow--disabled')) step(-1);
+		history.pushState(null, '', `#af=${encodeURIComponent(afNormPath(nextUrl.pathname) + nextUrl.search)}`);
+		afSync();
+	};
+
+	afScroller.addEventListener(
+		'click',
+		(event) => {
+			const link = event.target.closest('a[href]');
+			if (!link || !afScroller.contains(link)) return;
+
+			if (afIsLocal) {
+				event.preventDefault();
+				afApplyLocal(link);
+				return;
+			}
+
+			if (afApply(link)) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+		},
+		true
+	);
+
+	afPrevBtn?.addEventListener('click', () => {
+		if (!afPrevBtn.classList.contains('advanced_filters__arrow--disabled')) afStep(-1);
 	});
-	next?.addEventListener('click', () => {
-		if (!next.classList.contains('advanced_filters__arrow--disabled')) step(1);
+	afNextBtn?.addEventListener('click', () => {
+		if (!afNextBtn.classList.contains('advanced_filters__arrow--disabled')) afStep(1);
 	});
 
-	scroller.addEventListener('scroll', () => {
-		if (!keepScroll) scrollX = scroller.scrollLeft;
-		controls();
-	}, { passive: true });
+	afScroller.addEventListener(
+		'scroll',
+		() => {
+			if (!afKeepScroll) afScrollX = afScroller.scrollLeft;
+			afUpdateControls();
+		},
+		{ passive: true }
+	);
 
-	window.addEventListener('resize', controls);
-	window.addEventListener('popstate', sync);
+	window.addEventListener('resize', afUpdateControls);
+	window.addEventListener('popstate', afSync);
 
 	['pushState', 'replaceState'].forEach((method) => {
-		const original = history[method];
+		const afOriginalHistory = history[method];
 		history[method] = function (...args) {
-			const result = original.apply(this, args);
-			setTimeout(sync, 0);
+			const result = afOriginalHistory.apply(this, args);
+			setTimeout(afSync, 0);
 			return result;
 		};
 	});
 
-	const sidebarEl = q('.filtering-sidebar');
-	sidebarEl?.addEventListener('change', () => setTimeout(sync, 50));
-	sidebarEl?.addEventListener('listChangeEvent', () => setTimeout(sync, 100));
-	submitBtn()?.addEventListener('click', () => {
-		[100, 500, 1000].forEach((ms) => setTimeout(sync, ms));
-	});
-	q('.js-clear-filters')?.addEventListener('click', () => {
-		pending = null;
-		[100, 500].forEach((ms) => setTimeout(sync, ms));
+	const afSidebar = afQuery('.filtering-sidebar');
+	afSidebar?.addEventListener('change', () => setTimeout(afSync, 50));
+	afSidebar?.addEventListener('listChangeEvent', () => setTimeout(afSync, 100));
+	afSubmitBtn()?.addEventListener('click', () => afDefer(() => afSync(), [100, 500, 1000]));
+	afQuery('.js-clear-filters')?.addEventListener('click', () => {
+		afPendingKey = null;
+		afDefer(() => afSync(), [100, 500]);
 	});
 
 	new MutationObserver(() => {
-		if (!root.isConnected) {
-			mount();
-			refresh();
-		} else if (keepScroll) {
-			refresh();
+		if (!afRoot.isConnected) {
+			afMount();
+			afRefresh();
+		} else if (afKeepScroll) {
+			afRefresh();
 		}
 	}).observe(document.body, { childList: true, subtree: true });
 
-	// After a full load, only restore highlight from a live (non-reload) filtered URL.
-	if (isLocal || isPageReload || (!location.search && path(location.pathname) === path(BASE_PATH))) {
-		pending = null;
-		setActive(null);
-	} else {
-		sync();
-	}
-	controls();
+	if (afIsLocal || afIsReload || (!location.search && afPagePath === AF_BASE_PATH)) afSetActive(null);
+	else afSync();
+	afUpdateControls();
 })();
