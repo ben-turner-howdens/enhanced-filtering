@@ -23,15 +23,10 @@ body {
   position: absolute;
   bottom: 0;
   top: 0;
-  right: 22px;
+  right: 70px;
   width: 110px;
   z-index: 5;
-  display: none;
-}
-@media (max-width: 1210px) {
-  .advanced_filters__arrows {
-    display: block;
-  }
+  display: block;
 }
 .advanced_filters__arrow {
   align-items: center;
@@ -101,19 +96,15 @@ body {
   display: flex;
   flex-direction: row;
   gap: 16px;
-  justify-content: center;
-  margin: 0;
+  justify-content: flex-start;
+  margin: 0 auto;
   min-width: 0;
   overflow-x: auto;
   padding: 16px 18px 8px;
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
-}
-@media (max-width: 1210px) {
-  .advanced_filters__wrapper {
-    justify-content: flex-start;
-  }
+  max-width: 1090px;
 }
 .advanced_filters__wrapper::-webkit-scrollbar {
   display: none;

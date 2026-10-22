@@ -26,15 +26,11 @@ body {
         position: absolute;
         bottom: 0;
         top: 0;
-        right: 22px;
+        right: 70px;
         width: 110px;
         z-index: 5;
-        display: none;
+        display: block;
 
-        @include res(1210px) {
-            display: block;
-        }
-        
     }
 
     &__arrow {
@@ -117,17 +113,15 @@ body {
         display: flex;
         flex-direction: row;
         gap: 16px;
-        justify-content: center;
-        margin: 0;
+        justify-content: flex-start;
+        margin: 0 auto;
         min-width: 0;
         overflow-x: auto;
         padding: 16px 18px 8px;
         scrollbar-width: none;
         -ms-overflow-style: none;
         -webkit-overflow-scrolling: touch;
-        @include res(1210px) {
-            justify-content: flex-start;
-        }
+        max-width: 1090px;
 
         &::-webkit-scrollbar {
             display: none;

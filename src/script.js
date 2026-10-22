@@ -167,22 +167,34 @@
 		input.click();
 	};
 
-	const afSetExclusiveFacets = (params) => {
+	/** Turn on only the roundel's facets (assumes prior filters already cleared). */
+	const afEnableFacets = (params) => {
 		afFacetBoxes().forEach((input) => {
 			const shouldCheck = params.some(([name, value]) => input.name === name && afValuesEqual(input.value, value));
-			if (input.checked !== shouldCheck) afToggleFacet(input);
+			if (shouldCheck && !input.checked) afToggleFacet(input);
 		});
 	};
 
+	/**
+	 * Wipe every active filter. Prefer the site Clear control so URL-only / chip-only
+	 * selections (where the checkbox has left the DOM) are removed too.
+	 * @returns {boolean} true when a clear was attempted (caller should wait before re-applying).
+	 */
 	const afClearFacets = () => {
 		const clearBtn = afQuery('.filtering-sidebar .js-clear-filters, .js-clear-filters');
-		if (clearBtn && afFacetBoxes().some((box) => box.checked)) {
+		const hasChecked = afFacetBoxes().some((box) => box.checked);
+		const hasUrlFilters = afCurrentEntries().length > 0;
+		if (clearBtn && (hasChecked || hasUrlFilters)) {
 			afTriggerClick(clearBtn);
-			return;
+			return true;
 		}
+		let cleared = false;
 		afFacetBoxes().forEach((input) => {
-			if (input.checked) afToggleFacet(input);
+			if (!input.checked) return;
+			afToggleFacet(input);
+			cleared = true;
 		});
+		return cleared;
 	};
 
 	const afSubmitFilters = () => {
@@ -191,6 +203,16 @@
 		if (window.jQuery) window.jQuery(btn).trigger('click');
 		else btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
 		return true;
+	};
+
+	const afAfterApply = () => {
+		afDefer((i) => {
+			if (afPendingKey && afLinks().some((anchor) => afLinkKey(anchor.href) === afPendingKey && afIsExactRoundel(anchor))) {
+				afPendingKey = null;
+			}
+			afRefresh();
+			if (i === 2) afKeepScroll = false;
+		}, [100, 500, 1000]);
 	};
 
 	const afApply = (link) => {
@@ -208,24 +230,29 @@
 		afScrollX = afScroller.scrollLeft;
 		afKeepScroll = true;
 
+		// Clear-then-set so switching Chrome → Black (etc.) never stacks prior colours
+		// when the previous checkbox has disappeared from the sidebar after AJAX.
 		if (afIsExactRoundel(link)) {
 			afClearFacets();
 			afSetActive(null);
+			setTimeout(() => {
+				afSubmitFilters();
+				afAfterApply();
+			}, 50);
 		} else {
 			afSetActive(link);
-			afSetExclusiveFacets(params);
+			const needsSettle = afClearFacets();
+			setTimeout(
+				() => {
+					afEnableFacets(params);
+					setTimeout(() => {
+						afSubmitFilters();
+						afAfterApply();
+					}, 50);
+				},
+				needsSettle ? 120 : 0
+			);
 		}
-
-		setTimeout(() => {
-			afSubmitFilters();
-			afDefer((i) => {
-				if (afPendingKey && afLinks().some((anchor) => afLinkKey(anchor.href) === afPendingKey && afIsExactRoundel(anchor))) {
-					afPendingKey = null;
-				}
-				afRefresh();
-				if (i === 2) afKeepScroll = false;
-			}, [100, 500, 1000]);
-		}, 50);
 
 		return true;
 	};
