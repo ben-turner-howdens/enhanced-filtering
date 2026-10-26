@@ -109,18 +109,20 @@
 	};
 
 	const afSync = () => {
-		const exact = afLinks().find(afIsExactRoundel);
-		if (exact) {
-			afPendingKey = null;
-			afSetActive(exact, false);
-			return;
-		}
+		// Prefer the pending roundel so a partial apply (e.g. only Brass from
+		// Brass+Kitchen) doesn't highlight a shorter exact match mid-flight.
 		if (afPendingKey) {
-			const link = afLinks().find((anchor) => afLinkKey(anchor.href) === afPendingKey);
-			if (link) {
-				afSetActive(link, false);
+			const pending = afLinks().find((anchor) => afLinkKey(anchor.href) === afPendingKey);
+			if (pending) {
+				if (afIsExactRoundel(pending)) afPendingKey = null;
+				afSetActive(pending, false);
 				return;
 			}
+		}
+		const exact = afLinks().find(afIsExactRoundel);
+		if (exact) {
+			afSetActive(exact, false);
+			return;
 		}
 		afSetActive(null);
 	};
@@ -173,6 +175,30 @@
 			const shouldCheck = params.some(([name, value]) => input.name === name && afValuesEqual(input.value, value));
 			if (shouldCheck && !input.checked) afToggleFacet(input);
 		});
+	};
+
+	const afFacetsMatch = (params) =>
+		params.every(([name, value]) =>
+			afFacetBoxes().some((input) => input.checked && input.name === name && afValuesEqual(input.value, value))
+		);
+
+	/**
+	 * Enable facets with retries — toggling one checkbox can rebuild the sidebar (AJAX),
+	 * which drops later params in multi-facet roundels (e.g. Brass + Kitchen → only Brass).
+	 */
+	const afEnableFacetsReliable = (params, done) => {
+		let attempts = 0;
+		const maxAttempts = Math.max(4, params.length * 3);
+		const tick = () => {
+			afEnableFacets(params);
+			attempts += 1;
+			if (afFacetsMatch(params) || attempts >= maxAttempts) {
+				done();
+				return;
+			}
+			setTimeout(tick, 100);
+		};
+		tick();
 	};
 
 	/**
@@ -244,11 +270,10 @@
 			const needsSettle = afClearFacets();
 			setTimeout(
 				() => {
-					afEnableFacets(params);
-					setTimeout(() => {
+					afEnableFacetsReliable(params, () => {
 						afSubmitFilters();
 						afAfterApply();
-					}, 50);
+					});
 				},
 				needsSettle ? 120 : 0
 			);
