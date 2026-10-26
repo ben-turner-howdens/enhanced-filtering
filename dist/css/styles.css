@@ -23,9 +23,10 @@ body {
   position: absolute;
   bottom: 0;
   top: 0;
-  right: 22px;
+  right: 70px;
   width: 110px;
   z-index: 5;
+  display: block;
 }
 .advanced_filters__arrow {
   align-items: center;
@@ -96,13 +97,14 @@ body {
   flex-direction: row;
   gap: 16px;
   justify-content: flex-start;
-  margin: 0;
+  margin: 0 auto;
   min-width: 0;
   overflow-x: auto;
   padding: 16px 18px 8px;
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
+  max-width: 1090px;
 }
 .advanced_filters__wrapper::-webkit-scrollbar {
   display: none;
