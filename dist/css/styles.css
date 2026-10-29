@@ -6,12 +6,13 @@ body {
 }
 
 .product-listing__navigation.carousel {
-  display: none;
+  display: none !important;
 }
 
 .advanced_filters {
   box-sizing: border-box;
   margin: 0 auto;
+  min-height: 185px;
   max-width: 1400px;
   position: relative;
   width: 100%;

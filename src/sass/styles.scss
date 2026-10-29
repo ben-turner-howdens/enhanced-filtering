@@ -7,13 +7,18 @@ body {
     margin: 0;
 }
 
+// Hide the native PLP carousel. For fewer load jitters, also ship this rule as early
+// Optimizely "Shared Code" / head CSS so it applies before first paint — otherwise:
+// jitter 1 = native carousel paints then collapses; jitter 2 = our carousel mounts/moves in.
 .product-listing__navigation.carousel {
-    display: none;
+    display: none !important;
 }
 
 .advanced_filters {
     box-sizing: border-box;
     margin: 0 auto;
+    // Reserve space so the listing below doesn't jump when the carousel HTML arrives late
+    min-height: 185px;
     max-width: 1400px;
     position: relative;
     width: 100%;
