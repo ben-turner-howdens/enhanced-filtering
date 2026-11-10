@@ -4,7 +4,6 @@
 	const afNormPath = (pathname) => pathname.replace(/\/+$/, '') || '/';
 	const afPagePath = afNormPath(location.pathname);
 
-	// Prod: only fire on the handles PLP (and child paths). Local preview always runs.
 	if (!afIsLocal && afPagePath !== AF_BASE_PATH && !afPagePath.startsWith(`${AF_BASE_PATH}/`)) return;
 
 	const afRoot = document.querySelector('.advanced_filters');
@@ -19,14 +18,26 @@
 
 	const afQuery = (sel, el = document) => el.querySelector(sel);
 	const afQueryAll = (sel, el = document) => [...el.querySelectorAll(sel)];
-	// URL uses Fuller_and_Forge; checkbox value is "Fuller and Forge"
+	const afSafeDecode = (value) => {
+		try {
+			return decodeURIComponent(String(value));
+		} catch {
+			return String(value);
+		}
+	};
 	const afNormalize = (value) =>
-		decodeURIComponent(String(value)).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+		afSafeDecode(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 	const afValuesEqual = (a, b) => afNormalize(a) === afNormalize(b);
-	const afParseUrl = (href) => new URL(href, location.origin);
+	const afParseUrl = (href) => {
+		try {
+			return new URL(href, location.origin);
+		} catch {
+			return null;
+		}
+	};
 	const afLinkKey = (href) => {
 		const url = afParseUrl(href);
-		return afNormPath(url.pathname) + url.search;
+		return url ? afNormPath(url.pathname) + url.search : '';
 	};
 	const afLinks = () => afQueryAll('.advanced_filters__item a[href]', afScroller);
 	const afFacetBoxes = () => afQueryAll('.filtering-sidebar input.filtering-sidebar__facets-checkbox');
@@ -36,19 +47,9 @@
 		if (window.jQuery) window.jQuery(el).trigger('click');
 		else el.click();
 	};
-
-	const AF_IGNORE_PARAMS = new Set(['useajax', 'p', 'page', 'sortby', 'spellcheck']);
-	let afPendingKey = null;
-	let afScrollX = 0;
-	let afBusy = false;
-
-	const afMaxScroll = () => Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
-	const afClampScroll = (x) => Math.max(0, Math.min(afMaxScroll(), x));
-
+	const afParamsOf = (url) => [...url.searchParams.entries()];
 	const afWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-	/** Poll until `test()` is true or timeout — used to wait out PLP AJAX sidebar rebuilds. */
-	const afWaitFor = async (test, { timeout = 2000, interval = 50 } = {}) => {
+	const afWaitFor = async (test, timeout = 1200, interval = 40) => {
 		const start = Date.now();
 		while (Date.now() - start < timeout) {
 			if (test()) return true;
@@ -56,8 +57,17 @@
 		}
 		return test();
 	};
+	const afDefer = (fn, delays) => delays.forEach((ms) => setTimeout(fn, ms));
 
-	// Local preview stores filter state in #af= — clear on full boot/refresh.
+	const AF_IGNORE_PARAMS = new Set(['useajax', 'p', 'page', 'sortby', 'spellcheck']);
+	let afPendingKey = null;
+	let afScrollX = 0;
+	let afBusy = false;
+	let afResizeTimer = 0;
+
+	const afMaxScroll = () => Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
+	const afClampScroll = (x) => Math.max(0, Math.min(afMaxScroll(), x));
+
 	if (afIsLocal && location.hash.startsWith('#af=')) {
 		history.replaceState(null, '', location.pathname + location.search);
 	}
@@ -73,11 +83,11 @@
 	};
 	afMount();
 
-	const afParamsOf = (url) => [...url.searchParams.entries()];
-
 	const afCurrentUrl = () => {
 		if (afIsLocal && location.hash.startsWith('#af=')) {
-			return new URL(decodeURIComponent(location.hash.slice(4)), location.origin);
+			const decoded = afSafeDecode(location.hash.slice(4));
+			const url = afParseUrl(decoded);
+			if (url && (afIsLocal || url.origin === location.origin)) return url;
 		}
 		return new URL(location.href);
 	};
@@ -86,17 +96,11 @@
 		[...afCurrentUrl().searchParams.entries()].filter(([key]) => !AF_IGNORE_PARAMS.has(key.toLowerCase()));
 
 	const afIsExactRoundel = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return false;
-		}
+		const url = afParseUrl(link.href);
+		if (!url) return false;
 		if (!afIsLocal && url.origin !== location.origin) return false;
-
 		const liveUrl = afCurrentUrl();
 		if (afNormPath(url.pathname) !== afNormPath(afIsLocal ? liveUrl.pathname : location.pathname)) return false;
-
 		const wanted = afParamsOf(url);
 		if (!wanted.length) return false;
 		const current = afCurrentEntries();
@@ -133,12 +137,12 @@
 		}
 		const exact = afLinks()
 			.filter(afIsExactRoundel)
-			.sort((a, b) => afParamsOf(afParseUrl(b.href)).length - afParamsOf(afParseUrl(a.href)).length)[0];
-		if (exact) {
-			afSetActive(exact, false);
-			return;
-		}
-		afSetActive(null);
+			.sort((a, b) => {
+				const urlA = afParseUrl(a.href);
+				const urlB = afParseUrl(b.href);
+				return (urlB ? afParamsOf(urlB).length : 0) - (urlA ? afParamsOf(urlA).length : 0);
+			})[0];
+		afSetActive(exact || null, false);
 	};
 
 	const afUpdateControls = () => {
@@ -157,8 +161,7 @@
 		const item = afQuery('.advanced_filters__item', afScroller);
 		if (!item) return;
 		const gap = parseFloat(getComputedStyle(afScroller).columnGap || getComputedStyle(afScroller).gap) || 0;
-		const delta = direction * (item.getBoundingClientRect().width + gap);
-		afScrollX = afClampScroll(afScroller.scrollLeft + delta);
+		afScrollX = afClampScroll(afScroller.scrollLeft + direction * (item.getBoundingClientRect().width + gap));
 		afScroller.scrollTo({ left: afScrollX, behavior: 'smooth' });
 		afUpdateControls();
 	};
@@ -167,18 +170,22 @@
 		afFacetBoxes().find((input) => input.name === name && afValuesEqual(input.value, value));
 
 	const afToggleFacet = (input) => {
+		if (!input?.id) {
+			input?.click();
+			return;
+		}
 		const id = CSS.escape(input.id);
 		const option =
 			afQuery(`a.js-facet-option[data-id="${id}"]`) ||
 			afQuery(`label[for="${id}"] a.js-facet-option`);
-		if (option) {
-			const href = option.getAttribute('href');
-			option.removeAttribute('href');
-			afTriggerClick(option);
-			if (href != null) option.setAttribute('href', href);
+		if (!option) {
+			input.click();
 			return;
 		}
-		input.click();
+		const href = option.getAttribute('href');
+		option.removeAttribute('href');
+		afTriggerClick(option);
+		if (href != null) option.setAttribute('href', href);
 	};
 
 	const afClearFacets = () => {
@@ -206,63 +213,37 @@
 		return true;
 	};
 
-	const afAllChecked = (params) =>
-		params.every(([name, value]) => Boolean(afFindFacet(name, value)?.checked));
-
-	const afNoneChecked = () => !afFacetBoxes().some((box) => box.checked);
-
-	/**
-	 * Seamless exclusive apply via the real sidebar.
-	 * Critical: wait for clear/each toggle to settle before the next step — a fixed 100ms
-	 * after Clear often lost the race (AJAX rebuilt the sidebar and wiped Fuller / Kitchen).
-	 * Polls are short-interval so it still feels instant when the PLP is quick.
-	 */
 	const afApplyExclusive = async (params) => {
 		if (afClearFacets()) {
-			await afWaitFor(() => afNoneChecked() && afCurrentEntries().length === 0, {
-				timeout: 1200,
-				interval: 40,
-			});
+			await afWaitFor(() => !afFacetBoxes().some((box) => box.checked) && !afCurrentEntries().length);
 			await afWait(60);
 		}
-
 		for (let i = 0; i < params.length; i += 1) {
 			const [name, value] = params[i];
-			await afWaitFor(() => Boolean(afFindFacet(name, value)), { timeout: 800, interval: 40 });
+			await afWaitFor(() => Boolean(afFindFacet(name, value)), 800);
 			const input = afFindFacet(name, value);
 			if (!input) continue;
 			if (!input.checked) afToggleFacet(input);
-			await afWaitFor(() => Boolean(afFindFacet(name, value)?.checked), {
-				timeout: 800,
-				interval: 40,
-			});
+			await afWaitFor(() => Boolean(afFindFacet(name, value)?.checked), 800);
 			if (i < params.length - 1) await afWait(80);
 		}
-
-		await afWaitFor(() => afAllChecked(params), { timeout: 600, interval: 40 });
+		await afWaitFor(() => params.every(([name, value]) => afFindFacet(name, value)?.checked), 600);
 		afSubmitFilters();
 		await afWait(200);
 		afSync();
 	};
 
 	const afApply = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return false;
-		}
-		if (url.origin !== location.origin) return false;
-
+		const url = afParseUrl(link.href);
+		if (!url || url.origin !== location.origin) return false;
+		if (afNormPath(url.pathname) !== afPagePath) return false;
 		const params = afParamsOf(url);
-		if (afNormPath(url.pathname) !== afPagePath || !params.length) return false;
-		if (!afQuery('.filtering-sidebar') || !afSubmitBtn()) return false;
+		if (!params.length || !afQuery('.filtering-sidebar') || !afSubmitBtn()) return false;
 		if (afBusy) return true;
 
 		afScrollX = afScroller.scrollLeft;
 		afBusy = true;
-
-		const finish = () => {
+		const afFinish = () => {
 			afBusy = false;
 			afScroller.scrollLeft = afClampScroll(afScrollX);
 			afUpdateControls();
@@ -273,36 +254,28 @@
 			afSetActive(null);
 			(async () => {
 				afClearFacets();
-				await afWaitFor(() => afNoneChecked(), { timeout: 1200, interval: 40 });
+				await afWaitFor(() => !afFacetBoxes().some((box) => box.checked));
 				afSubmitFilters();
 				await afWait(200);
-			})().finally(finish);
+			})().finally(afFinish);
 		} else {
 			afSetActive(link);
-			afApplyExclusive(params).finally(finish);
+			afApplyExclusive(params).finally(afFinish);
 		}
-
 		return true;
 	};
 
 	const afApplyLocal = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return;
-		}
+		const url = afParseUrl(link.href);
+		if (!url) return;
 		const params = afParamsOf(url);
 		const exact = afIsExactRoundel(link);
 		const nextUrl = new URL(AF_BASE_PATH, location.origin);
-
-		if (!exact) {
+		if (exact) afPendingKey = null;
+		else {
 			params.forEach(([name, value]) => nextUrl.searchParams.append(name, value));
 			afPendingKey = afLinkKey(link.href);
-		} else {
-			afPendingKey = null;
 		}
-
 		history.pushState(null, '', `#af=${encodeURIComponent(afNormPath(nextUrl.pathname) + nextUrl.search)}`);
 		afSync();
 	};
@@ -312,13 +285,11 @@
 		(event) => {
 			const link = event.target.closest('a[href]');
 			if (!link || !afScroller.contains(link)) return;
-
 			if (afIsLocal) {
 				event.preventDefault();
 				afApplyLocal(link);
 				return;
 			}
-
 			if (afApply(link)) {
 				event.preventDefault();
 				event.stopPropagation();
@@ -333,7 +304,6 @@
 	afNextBtn?.addEventListener('click', () => {
 		if (!afNextBtn.classList.contains('advanced_filters__arrow--disabled')) afStep(1);
 	});
-
 	afScroller.addEventListener(
 		'scroll',
 		() => {
@@ -343,7 +313,10 @@
 		{ passive: true }
 	);
 
-	window.addEventListener('resize', afUpdateControls);
+	window.addEventListener('resize', () => {
+		clearTimeout(afResizeTimer);
+		afResizeTimer = setTimeout(afUpdateControls, 100);
+	});
 	window.addEventListener('popstate', afSync);
 
 	['pushState', 'replaceState'].forEach((method) => {
@@ -358,24 +331,18 @@
 	const afSidebar = afQuery('.filtering-sidebar');
 	afSidebar?.addEventListener('change', () => setTimeout(afSync, 50));
 	afSidebar?.addEventListener('listChangeEvent', () => setTimeout(afSync, 100));
-	afSubmitBtn()?.addEventListener('click', () => {
-		setTimeout(afSync, 100);
-		setTimeout(afSync, 500);
-		setTimeout(afSync, 1000);
-	});
+	afSubmitBtn()?.addEventListener('click', () => afDefer(afSync, [100, 500, 1000]));
 	afQuery('.js-clear-filters')?.addEventListener('click', () => {
 		afPendingKey = null;
-		setTimeout(afSync, 100);
-		setTimeout(afSync, 500);
+		afDefer(afSync, [100, 500]);
 	});
 
 	new MutationObserver(() => {
-		if (!afRoot.isConnected) {
-			afMount();
-			afSync();
-			afScroller.scrollLeft = afClampScroll(afScrollX);
-			afUpdateControls();
-		}
+		if (afRoot.isConnected) return;
+		afMount();
+		afSync();
+		afScroller.scrollLeft = afClampScroll(afScrollX);
+		afUpdateControls();
 	}).observe(document.body, { childList: true, subtree: true });
 
 	afSync();
