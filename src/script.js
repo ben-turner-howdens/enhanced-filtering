@@ -48,6 +48,10 @@
 		else el.click();
 	};
 	const afParamsOf = (url) => [...url.searchParams.entries()];
+	const afParamCount = (href) => {
+		const url = afParseUrl(href);
+		return url ? afParamsOf(url).length : 0;
+	};
 	const afWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 	const afWaitFor = async (test, timeout = 1200, interval = 40) => {
 		const start = Date.now();
@@ -67,6 +71,7 @@
 
 	const afMaxScroll = () => Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
 	const afClampScroll = (x) => Math.max(0, Math.min(afMaxScroll(), x));
+	const afNoneChecked = () => !afFacetBoxes().some((box) => box.checked);
 
 	if (afIsLocal && location.hash.startsWith('#af=')) {
 		history.replaceState(null, '', location.pathname + location.search);
@@ -85,9 +90,8 @@
 
 	const afCurrentUrl = () => {
 		if (afIsLocal && location.hash.startsWith('#af=')) {
-			const decoded = afSafeDecode(location.hash.slice(4));
-			const url = afParseUrl(decoded);
-			if (url && (afIsLocal || url.origin === location.origin)) return url;
+			const url = afParseUrl(afSafeDecode(location.hash.slice(4)));
+			if (url && url.origin === location.origin) return url;
 		}
 		return new URL(location.href);
 	};
@@ -97,8 +101,7 @@
 
 	const afIsExactRoundel = (link) => {
 		const url = afParseUrl(link.href);
-		if (!url) return false;
-		if (!afIsLocal && url.origin !== location.origin) return false;
+		if (!url || (!afIsLocal && url.origin !== location.origin)) return false;
 		const liveUrl = afCurrentUrl();
 		if (afNormPath(url.pathname) !== afNormPath(afIsLocal ? liveUrl.pathname : location.pathname)) return false;
 		const wanted = afParamsOf(url);
@@ -135,14 +138,17 @@
 				return;
 			}
 		}
-		const exact = afLinks()
-			.filter(afIsExactRoundel)
-			.sort((a, b) => {
-				const urlA = afParseUrl(a.href);
-				const urlB = afParseUrl(b.href);
-				return (urlB ? afParamsOf(urlB).length : 0) - (urlA ? afParamsOf(urlA).length : 0);
-			})[0];
-		afSetActive(exact || null, false);
+		let exact = null;
+		let exactCount = -1;
+		afLinks().forEach((anchor) => {
+			if (!afIsExactRoundel(anchor)) return;
+			const count = afParamCount(anchor.href);
+			if (count > exactCount) {
+				exact = anchor;
+				exactCount = count;
+			}
+		});
+		afSetActive(exact, false);
 	};
 
 	const afUpdateControls = () => {
@@ -190,9 +196,7 @@
 
 	const afClearFacets = () => {
 		const clearBtn = afQuery('.filtering-sidebar .js-clear-filters, .js-clear-filters');
-		const hasChecked = afFacetBoxes().some((box) => box.checked);
-		const hasUrlFilters = afCurrentEntries().length > 0;
-		if (clearBtn && (hasChecked || hasUrlFilters)) {
+		if (clearBtn && (!afNoneChecked() || afCurrentEntries().length)) {
 			afTriggerClick(clearBtn);
 			return true;
 		}
@@ -215,7 +219,7 @@
 
 	const afApplyExclusive = async (params) => {
 		if (afClearFacets()) {
-			await afWaitFor(() => !afFacetBoxes().some((box) => box.checked) && !afCurrentEntries().length);
+			await afWaitFor(() => afNoneChecked() && !afCurrentEntries().length);
 			await afWait(60);
 		}
 		for (let i = 0; i < params.length; i += 1) {
@@ -254,7 +258,7 @@
 			afSetActive(null);
 			(async () => {
 				afClearFacets();
-				await afWaitFor(() => !afFacetBoxes().some((box) => box.checked));
+				await afWaitFor(afNoneChecked);
 				afSubmitFilters();
 				await afWait(200);
 			})().finally(afFinish);
