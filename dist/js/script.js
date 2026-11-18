@@ -4,7 +4,6 @@
 	const afNormPath = (pathname) => pathname.replace(/\/+$/, '') || '/';
 	const afPagePath = afNormPath(location.pathname);
 
-	// Prod: only fire on the handles PLP (and child paths). Local preview always runs.
 	if (!afIsLocal && afPagePath !== AF_BASE_PATH && !afPagePath.startsWith(`${AF_BASE_PATH}/`)) return;
 
 	const afRoot = document.querySelector('.advanced_filters');
@@ -19,51 +18,80 @@
 
 	const afQuery = (sel, el = document) => el.querySelector(sel);
 	const afQueryAll = (sel, el = document) => [...el.querySelectorAll(sel)];
-	const afValuesEqual = (a, b) => a === b || a.replace(/_/g, ' ') === b.replace(/_/g, ' ');
-	const afParseUrl = (href) => new URL(href, location.origin);
+	const afSafeDecode = (value) => {
+		try {
+			return decodeURIComponent(String(value));
+		} catch {
+			return String(value);
+		}
+	};
+	const afNormalize = (value) =>
+		afSafeDecode(value).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+	const afValuesEqual = (a, b) => afNormalize(a) === afNormalize(b);
+	const afParseUrl = (href) => {
+		try {
+			return new URL(href, location.origin);
+		} catch {
+			return null;
+		}
+	};
 	const afLinkKey = (href) => {
 		const url = afParseUrl(href);
-		return afNormPath(url.pathname) + url.search;
+		return url ? afNormPath(url.pathname) + url.search : '';
 	};
 	const afLinks = () => afQueryAll('.advanced_filters__item a[href]', afScroller);
 	const afFacetBoxes = () => afQueryAll('.filtering-sidebar input.filtering-sidebar__facets-checkbox');
 	const afSubmitBtn = () => afQuery('.filtering-sidebar__form-submit, button.js-update-filters');
-	const afDefer = (fn, delays) => delays.forEach((ms, i) => setTimeout(() => fn(i), ms));
 	const afTriggerClick = (el) => {
 		if (!el) return;
 		if (window.jQuery) window.jQuery(el).trigger('click');
 		else el.click();
 	};
+	const afParamsOf = (url) => [...url.searchParams.entries()];
+	const afParamCount = (href) => {
+		const url = afParseUrl(href);
+		return url ? afParamsOf(url).length : 0;
+	};
+	const afWait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+	const afWaitFor = async (test, timeout = 1200, interval = 40) => {
+		const start = Date.now();
+		while (Date.now() - start < timeout) {
+			if (test()) return true;
+			await afWait(interval);
+		}
+		return test();
+	};
+	const afDefer = (fn, delays) => delays.forEach((ms) => setTimeout(fn, ms));
 
 	const AF_IGNORE_PARAMS = new Set(['useajax', 'p', 'page', 'sortby', 'spellcheck']);
 	let afPendingKey = null;
 	let afScrollX = 0;
-	let afKeepScroll = false;
+	let afBusy = false;
+	let afResizeTimer = 0;
 
-	// Local preview stores filter state in #af= — clear on full boot/refresh.
+	const afMaxScroll = () => Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
+	const afClampScroll = (x) => Math.max(0, Math.min(afMaxScroll(), x));
+	const afNoneChecked = () => !afFacetBoxes().some((box) => box.checked);
+
 	if (afIsLocal && location.hash.startsWith('#af=')) {
 		history.replaceState(null, '', location.pathname + location.search);
-	}
-
-	const afIsReload = performance.getEntriesByType?.('navigation')?.[0]?.type === 'reload';
-	if (!afIsLocal && afIsReload && (location.search || afPagePath !== AF_BASE_PATH)) {
-		location.replace(AF_BASE_PATH);
-		return;
 	}
 
 	const afMount = () => {
 		const nav = afQuery('.product-listing__navigation');
 		const listing = afQuery('.js-product-listing');
-		if (nav) nav.after(afRoot);
-		else if (listing) listing.before(afRoot);
+		if (nav) {
+			if (nav.nextElementSibling !== afRoot) nav.after(afRoot);
+			return;
+		}
+		if (listing && listing.previousElementSibling !== afRoot) listing.before(afRoot);
 	};
 	afMount();
 
-	const afParamsOf = (url) => [...url.searchParams.entries()];
-
 	const afCurrentUrl = () => {
 		if (afIsLocal && location.hash.startsWith('#af=')) {
-			return new URL(decodeURIComponent(location.hash.slice(4)), location.origin);
+			const url = afParseUrl(afSafeDecode(location.hash.slice(4)));
+			if (url && url.origin === location.origin) return url;
 		}
 		return new URL(location.href);
 	};
@@ -72,17 +100,10 @@
 		[...afCurrentUrl().searchParams.entries()].filter(([key]) => !AF_IGNORE_PARAMS.has(key.toLowerCase()));
 
 	const afIsExactRoundel = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return false;
-		}
-		if (!afIsLocal && url.origin !== location.origin) return false;
-
+		const url = afParseUrl(link.href);
+		if (!url || (!afIsLocal && url.origin !== location.origin)) return false;
 		const liveUrl = afCurrentUrl();
 		if (afNormPath(url.pathname) !== afNormPath(afIsLocal ? liveUrl.pathname : location.pathname)) return false;
-
 		const wanted = afParamsOf(url);
 		if (!wanted.length) return false;
 		const current = afCurrentEntries();
@@ -109,8 +130,6 @@
 	};
 
 	const afSync = () => {
-		// Prefer the pending roundel so a partial apply (e.g. only Brass from
-		// Brass+Kitchen) doesn't highlight a shorter exact match mid-flight.
 		if (afPendingKey) {
 			const pending = afLinks().find((anchor) => afLinkKey(anchor.href) === afPendingKey);
 			if (pending) {
@@ -119,98 +138,65 @@
 				return;
 			}
 		}
-		const exact = afLinks().find(afIsExactRoundel);
-		if (exact) {
-			afSetActive(exact, false);
-			return;
-		}
-		afSetActive(null);
+		let exact = null;
+		let exactCount = -1;
+		afLinks().forEach((anchor) => {
+			if (!afIsExactRoundel(anchor)) return;
+			const count = afParamCount(anchor.href);
+			if (count > exactCount) {
+				exact = anchor;
+				exactCount = count;
+			}
+		});
+		afSetActive(exact, false);
 	};
 
 	const afUpdateControls = () => {
-		const maxScroll = Math.max(afScroller.scrollWidth - afScroller.clientWidth, 0);
+		const maxScroll = afMaxScroll();
 		const hasOverflow = maxScroll > 1;
 		afTrack?.classList.toggle('advanced_filters__scrollbar-container--hidden', !hasOverflow);
-		afPrevBtn?.classList.toggle('advanced_filters__arrow--disabled', afScroller.scrollLeft <= 1);
-		afNextBtn?.classList.toggle('advanced_filters__arrow--disabled', afScroller.scrollLeft >= maxScroll - 1);
+		afPrevBtn?.classList.toggle('advanced_filters__arrow--disabled', !hasOverflow || afScroller.scrollLeft <= 1);
+		afNextBtn?.classList.toggle('advanced_filters__arrow--disabled', !hasOverflow || afScroller.scrollLeft >= maxScroll - 1);
 		if (!afThumb || !afTrack || !hasOverflow) return;
 		const thumbWidth = (afScroller.clientWidth / afScroller.scrollWidth) * afTrack.clientWidth;
 		afThumb.style.width = `${thumbWidth}px`;
 		afThumb.style.transform = `translateX(${(afScroller.scrollLeft / maxScroll) * (afTrack.clientWidth - thumbWidth)}px)`;
 	};
 
-	const afRefresh = () => {
-		afSync();
-		if (afKeepScroll) {
-			afScroller.scrollLeft = afScrollX;
-			afUpdateControls();
-		}
-	};
-
 	const afStep = (direction) => {
 		const item = afQuery('.advanced_filters__item', afScroller);
 		if (!item) return;
 		const gap = parseFloat(getComputedStyle(afScroller).columnGap || getComputedStyle(afScroller).gap) || 0;
-		afScroller.scrollBy({ left: direction * (item.getBoundingClientRect().width + gap), behavior: 'smooth' });
+		afScrollX = afClampScroll(afScroller.scrollLeft + direction * (item.getBoundingClientRect().width + gap));
+		afScroller.scrollTo({ left: afScrollX, behavior: 'smooth' });
+		afUpdateControls();
 	};
 
+	const afFindFacet = (name, value) =>
+		afFacetBoxes().find((input) => input.name === name && afValuesEqual(input.value, value));
+
 	const afToggleFacet = (input) => {
+		if (!input?.id) {
+			input?.click();
+			return;
+		}
 		const id = CSS.escape(input.id);
 		const option =
 			afQuery(`a.js-facet-option[data-id="${id}"]`) ||
 			afQuery(`label[for="${id}"] a.js-facet-option`);
-		if (option) {
-			const href = option.getAttribute('href');
-			option.removeAttribute('href');
-			afTriggerClick(option);
-			if (href != null) option.setAttribute('href', href);
+		if (!option) {
+			input.click();
 			return;
 		}
-		input.click();
+		const href = option.getAttribute('href');
+		option.removeAttribute('href');
+		afTriggerClick(option);
+		if (href != null) option.setAttribute('href', href);
 	};
 
-	/** Turn on only the roundel's facets (assumes prior filters already cleared). */
-	const afEnableFacets = (params) => {
-		afFacetBoxes().forEach((input) => {
-			const shouldCheck = params.some(([name, value]) => input.name === name && afValuesEqual(input.value, value));
-			if (shouldCheck && !input.checked) afToggleFacet(input);
-		});
-	};
-
-	const afFacetsMatch = (params) =>
-		params.every(([name, value]) =>
-			afFacetBoxes().some((input) => input.checked && input.name === name && afValuesEqual(input.value, value))
-		);
-
-	/**
-	 * Enable facets with retries — toggling one checkbox can rebuild the sidebar (AJAX),
-	 * which drops later params in multi-facet roundels (e.g. Brass + Kitchen → only Brass).
-	 */
-	const afEnableFacetsReliable = (params, done) => {
-		let attempts = 0;
-		const maxAttempts = Math.max(4, params.length * 3);
-		const tick = () => {
-			afEnableFacets(params);
-			attempts += 1;
-			if (afFacetsMatch(params) || attempts >= maxAttempts) {
-				done();
-				return;
-			}
-			setTimeout(tick, 100);
-		};
-		tick();
-	};
-
-	/**
-	 * Wipe every active filter. Prefer the site Clear control so URL-only / chip-only
-	 * selections (where the checkbox has left the DOM) are removed too.
-	 * @returns {boolean} true when a clear was attempted (caller should wait before re-applying).
-	 */
 	const afClearFacets = () => {
 		const clearBtn = afQuery('.filtering-sidebar .js-clear-filters, .js-clear-filters');
-		const hasChecked = afFacetBoxes().some((box) => box.checked);
-		const hasUrlFilters = afCurrentEntries().length > 0;
-		if (clearBtn && (hasChecked || hasUrlFilters)) {
+		if (clearBtn && (!afNoneChecked() || afCurrentEntries().length)) {
 			afTriggerClick(clearBtn);
 			return true;
 		}
@@ -231,75 +217,69 @@
 		return true;
 	};
 
-	const afAfterApply = () => {
-		afDefer((i) => {
-			if (afPendingKey && afLinks().some((anchor) => afLinkKey(anchor.href) === afPendingKey && afIsExactRoundel(anchor))) {
-				afPendingKey = null;
-			}
-			afRefresh();
-			if (i === 2) afKeepScroll = false;
-		}, [100, 500, 1000]);
+	const afApplyExclusive = async (params) => {
+		if (afClearFacets()) {
+			await afWaitFor(() => afNoneChecked() && !afCurrentEntries().length);
+			await afWait(60);
+		}
+		for (let i = 0; i < params.length; i += 1) {
+			const [name, value] = params[i];
+			await afWaitFor(() => Boolean(afFindFacet(name, value)), 800);
+			const input = afFindFacet(name, value);
+			if (!input) continue;
+			if (!input.checked) afToggleFacet(input);
+			await afWaitFor(() => Boolean(afFindFacet(name, value)?.checked), 800);
+			if (i < params.length - 1) await afWait(80);
+		}
+		await afWaitFor(() => params.every(([name, value]) => afFindFacet(name, value)?.checked), 600);
+		afSubmitFilters();
+		await afWait(200);
+		afSync();
 	};
 
 	const afApply = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return false;
-		}
-		if (url.origin !== location.origin) return false;
+		const url = afParseUrl(link.href);
+		if (!url || url.origin !== location.origin) return false;
+		if (afNormPath(url.pathname) !== afPagePath) return false;
 		const params = afParamsOf(url);
-		if (afNormPath(url.pathname) !== afPagePath || !params.length) return false;
-		if (!afQuery('.filtering-sidebar') || !afSubmitBtn()) return false;
+		if (!params.length || !afQuery('.filtering-sidebar') || !afSubmitBtn()) return false;
+		if (afBusy) return true;
 
 		afScrollX = afScroller.scrollLeft;
-		afKeepScroll = true;
+		afBusy = true;
+		const afFinish = () => {
+			afBusy = false;
+			afScroller.scrollLeft = afClampScroll(afScrollX);
+			afUpdateControls();
+			afSync();
+		};
 
-		// Clear-then-set so switching Chrome → Black (etc.) never stacks prior colours
-		// when the previous checkbox has disappeared from the sidebar after AJAX.
 		if (afIsExactRoundel(link)) {
-			afClearFacets();
 			afSetActive(null);
-			setTimeout(() => {
+			(async () => {
+				afClearFacets();
+				await afWaitFor(afNoneChecked);
 				afSubmitFilters();
-				afAfterApply();
-			}, 50);
+				await afWait(200);
+			})().finally(afFinish);
 		} else {
 			afSetActive(link);
-			const needsSettle = afClearFacets();
-			setTimeout(
-				() => {
-					afEnableFacetsReliable(params, () => {
-						afSubmitFilters();
-						afAfterApply();
-					});
-				},
-				needsSettle ? 120 : 0
-			);
+			afApplyExclusive(params).finally(afFinish);
 		}
-
 		return true;
 	};
 
 	const afApplyLocal = (link) => {
-		let url;
-		try {
-			url = afParseUrl(link.href);
-		} catch {
-			return;
-		}
+		const url = afParseUrl(link.href);
+		if (!url) return;
 		const params = afParamsOf(url);
 		const exact = afIsExactRoundel(link);
 		const nextUrl = new URL(AF_BASE_PATH, location.origin);
-
-		if (!exact) {
+		if (exact) afPendingKey = null;
+		else {
 			params.forEach(([name, value]) => nextUrl.searchParams.append(name, value));
 			afPendingKey = afLinkKey(link.href);
-		} else {
-			afPendingKey = null;
 		}
-
 		history.pushState(null, '', `#af=${encodeURIComponent(afNormPath(nextUrl.pathname) + nextUrl.search)}`);
 		afSync();
 	};
@@ -309,13 +289,11 @@
 		(event) => {
 			const link = event.target.closest('a[href]');
 			if (!link || !afScroller.contains(link)) return;
-
 			if (afIsLocal) {
 				event.preventDefault();
 				afApplyLocal(link);
 				return;
 			}
-
 			if (afApply(link)) {
 				event.preventDefault();
 				event.stopPropagation();
@@ -330,17 +308,19 @@
 	afNextBtn?.addEventListener('click', () => {
 		if (!afNextBtn.classList.contains('advanced_filters__arrow--disabled')) afStep(1);
 	});
-
 	afScroller.addEventListener(
 		'scroll',
 		() => {
-			if (!afKeepScroll) afScrollX = afScroller.scrollLeft;
+			afScrollX = afScroller.scrollLeft;
 			afUpdateControls();
 		},
 		{ passive: true }
 	);
 
-	window.addEventListener('resize', afUpdateControls);
+	window.addEventListener('resize', () => {
+		clearTimeout(afResizeTimer);
+		afResizeTimer = setTimeout(afUpdateControls, 100);
+	});
 	window.addEventListener('popstate', afSync);
 
 	['pushState', 'replaceState'].forEach((method) => {
@@ -355,22 +335,20 @@
 	const afSidebar = afQuery('.filtering-sidebar');
 	afSidebar?.addEventListener('change', () => setTimeout(afSync, 50));
 	afSidebar?.addEventListener('listChangeEvent', () => setTimeout(afSync, 100));
-	afSubmitBtn()?.addEventListener('click', () => afDefer(() => afSync(), [100, 500, 1000]));
+	afSubmitBtn()?.addEventListener('click', () => afDefer(afSync, [100, 500, 1000]));
 	afQuery('.js-clear-filters')?.addEventListener('click', () => {
 		afPendingKey = null;
-		afDefer(() => afSync(), [100, 500]);
+		afDefer(afSync, [100, 500]);
 	});
 
 	new MutationObserver(() => {
-		if (!afRoot.isConnected) {
-			afMount();
-			afRefresh();
-		} else if (afKeepScroll) {
-			afRefresh();
-		}
+		if (afRoot.isConnected) return;
+		afMount();
+		afSync();
+		afScroller.scrollLeft = afClampScroll(afScrollX);
+		afUpdateControls();
 	}).observe(document.body, { childList: true, subtree: true });
 
-	if (afIsLocal || afIsReload || (!location.search && afPagePath === AF_BASE_PATH)) afSetActive(null);
-	else afSync();
+	afSync();
 	afUpdateControls();
 })();
