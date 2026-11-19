@@ -29,6 +29,11 @@ body {
   z-index: 5;
   display: block;
 }
+@media (max-width: 768px) {
+  .advanced_filters__arrows {
+    display: none;
+  }
+}
 .advanced_filters__arrow {
   align-items: center;
   background: #fff;
@@ -162,7 +167,7 @@ body {
   outline-offset: 4px;
 }
 .advanced_filters__item p {
-  font-size: 15px;
+  font-size: 14px;
   margin-top: 4px;
   line-height: 20px;
 }

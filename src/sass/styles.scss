@@ -36,6 +36,10 @@ body {
         z-index: 5;
         display: block;
 
+        @include res(768px){
+            display: none;
+        }
+
     }
 
     &__arrow {
@@ -196,7 +200,7 @@ body {
         }
 
         p {
-            font-size: 15px;
+            font-size: 14px;
             margin-top: 4px;
             line-height: 20px;
         }
